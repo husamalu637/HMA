@@ -15,7 +15,6 @@ HTML_INTERFACE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HMA - بوابة التحميل الذكية</title>
-    <!-- استدعاء مكتبة FontAwesome للرموز -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { box-sizing: border-box; transition: all 0.25s ease; }
@@ -191,7 +190,6 @@ HTML_INTERFACE = """
 </head>
 <body>
 
-<!-- خلفية شبكة واتساب المكررة بحجم صغير وظاهر -->
 <div class="whatsapp-bg" id="wpBg"></div>
 
 <div class="card">
@@ -204,13 +202,11 @@ HTML_INTERFACE = """
     
     <button id="mainBtn" class="btn-style" onclick="checkVideoLink()">فحص الرابط واستخراج الجودات</button>
 
-    <!-- قائمة اختيار الجودة الموحدة والتلقائية -->
     <div class="select-container" id="qualitySection">
         <select id="qualitySelect"></select>
         <button id="downloadBtn" class="btn-style" onclick="startDownload()">تأكيد وتحميل الجودة المختارة</button>
     </div>
 
-    <!-- شريط التقدم والنسبة المئوية الموحد -->
     <div class="progress-container" id="progressSection">
         <div class="progress-bar-bg">
             <div class="progress-bar-fill" id="progressBar"></div>
@@ -330,14 +326,12 @@ async function startDownload() {
             document.getElementById('progressBar').style.width = '100%';
             document.getElementById('progressPercent').innerHTML = '100%';
             
-            // عرض رسالة النجاح والعد التنازلي التلقائي قبل إعادة التصفير
             statusDiv.innerHTML = `
                 <span style='color: #448855; font-weight: bold;'>✨ اكتمل حفظ الفيديو بنجاح 100% داخل ذاكرة الجهاز!</span><br>
-                <span style='color: #4a4a4a; font-size: 11px;'>اسم الملف في المعرض: ${result.file_name}</span><br>
+                <span style='color: #4a4a4a; font-size: 11px;'>اسم الملف: ${result.file_name}</span><br>
                 <span style='color: #888; font-size: 12px; display: inline-block; margin-top: 10px;'>🔄 سيتم إعداد الواجهة لاستقبال رابط جديد تلقائياً خلال 5 ثوانٍ...</span>
             `;
 
-            // 🌟 وظيفة التصفير التلقائي الفائقة (العودة للبداية بدون تحديث الصفحة)
             setTimeout(() => {
                 resetInterfaceToHome();
             }, 5000);
@@ -353,17 +347,16 @@ async function startDownload() {
     }
 }
 
-// دالة ذكية لإعادة تصفير عناصر الواجهة والبدء من جديد بالكامل
 function resetInterfaceToHome() {
-    document.getElementById('videoUrl').value = ""; // تفريغ الحقل
-    document.getElementById('progressSection').style.display = "none"; // إخفاء شريط التحميل
-    document.getElementById('progressBar').style.width = '0%'; // تصفير الشريط
-    document.getElementById('progressPercent').innerHTML = '0%'; // تصفير النسبة
-    document.getElementById('qualitySection').style.display = "none"; // إخفاء قسم الجودات
-    document.getElementById('downloadBtn').disabled = false; // فك قفل زر التنزيل
-    document.getElementById('mainBtn').disabled = false; // تفعيل الزر الرئيسي للفحص مجدداً
-    document.getElementById('status').innerHTML = "🎯 مستعد وفي انتظار الروابط..."; // إعادة الرسالة الأصلية
-    availableMedias = []; // مسح مصفوفة الميديا السابقة من الذاكرة مؤقتاً
+    document.getElementById('videoUrl').value = ""; 
+    document.getElementById('progressSection').style.display = "none"; 
+    document.getElementById('progressBar').style.width = '0%'; 
+    document.getElementById('progressPercent').innerHTML = '0%'; 
+    document.getElementById('qualitySection').style.display = "none"; 
+    document.getElementById('downloadBtn').disabled = false; 
+    document.getElementById('mainBtn').disabled = false; 
+    document.getElementById('status').innerHTML = "🎯 مستعد وفي انتظار الروابط..."; 
+    availableMedias = []; 
 }
 </script>
 
@@ -427,10 +420,8 @@ def download_api():
     ext = data.get('extension', 'mp4')
 
     try:
-        download_folder = "/storage/emulated/0/Download"
-        if not os.path.exists(download_folder):
-            download_folder = os.getcwd()
-
+        # ملاحظة: السيرفرات السحابية لا تملك صلاحية الوصول لذاكرة الهاتف
+        download_folder = os.getcwd() 
         file_name = f"HMA_{int(time.time())}.{ext}"
         full_save_path = os.path.join(download_folder, file_name)
 
@@ -453,4 +444,5 @@ def download_api():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=T
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
