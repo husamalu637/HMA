@@ -1,7 +1,7 @@
 import os
 import time
 import requests
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, Response, stream_with_context
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -213,7 +213,7 @@ HTML_INTERFACE = """
         </div>
         <div class="progress-text">
             <span id="progressPercent">0%</span>
-            <span>جاري حفظ الملف في الذاكرة الحقيقية...</span>
+            <span>جاري تجهيز التحميل المباشر...</span>
         </div>
     </div>
     
@@ -221,22 +221,11 @@ HTML_INTERFACE = """
 </div>
 
 <script>
-// دالة توليد وتكرار الرموز تلقائياً لملء كامل حجم الشاشة كخلفية واتساب
 function generateWhatsappPattern() {
     const bgContainer = document.getElementById('wpBg');
-    const icons = [
-        'fab fa-tiktok', 
-        'fas fa-video', 
-        'fab fa-youtube', 
-        'fab fa-facebook', 
-        'fab fa-instagram', 
-        'fas fa-film', 
-        'fas fa-clapperboard'
-    ];
-    
+    const icons = ['fab fa-tiktok', 'fas fa-video', 'fab fa-youtube', 'fab fa-facebook', 'fab fa-instagram', 'fas fa-film', 'fas fa-clapperboard'];
     for (let i = 0; i < 120; i++) {
-        const randomIcon = icons[i % icons.length];
-        bgContainer.innerHTML += `<i class="${randomIcon}"></i>`;
+        bgContainer.innerHTML += `<i class="${icons[i % icons.length]}"></i>`;
     }
 }
 generateWhatsappPattern();
@@ -247,124 +236,45 @@ async function checkVideoLink() {
     const videoUrl = document.getElementById('videoUrl').value.trim();
     const statusDiv = document.getElementById('status');
     const mainBtn = document.getElementById('mainBtn');
-    
-    if (!videoUrl) {
-        statusDiv.innerHTML = "<span style='color: #a33333;'>⚠️ الرجاء لصق رابط الفيديو أولاً!</span>";
-        return;
-    }
-
+    if (!videoUrl) { statusDiv.innerHTML = "⚠️ الرجاء لصق رابط الفيديو أولاً!"; return; }
     mainBtn.disabled = true;
-    statusDiv.innerHTML = "<span style='color: #aa8833;'>⏳ جاري معالجة الرابط واستخراج الجودات المتاحة...</span>";
-
+    statusDiv.innerHTML = "⏳ جاري معالجة الرابط...";
     try {
         const response = await fetch('/api/check', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url: videoUrl })
         });
-
         const result = await response.json();
-
         if (response.ok && result.success) {
             availableMedias = result.medias;
             const selectDropdown = document.getElementById('qualitySelect');
             selectDropdown.innerHTML = "";
-            
             availableMedias.forEach((media, index) => {
-                let qualityText = media.quality || "تلقائية";
-                let extension = media.extension || "mp4";
-                selectDropdown.innerHTML += `<option value="${index}">جودة: ${qualityText} (${extension})</option>`;
+                selectDropdown.innerHTML += `<option value="${index}">جودة: ${media.quality || "تلقائية"} (${media.extension || "mp4"})</option>`;
             });
-
-            document.getElementById('videoUrl').value = "";
             document.getElementById('qualitySection').style.display = "block";
-            statusDiv.innerHTML = "<span style='color: #448855;'>✨ تم العثور على جودات الفيديو! اختر الجودة المفضلة لبدء الحفظ.</span>";
+            statusDiv.innerHTML = "✨ تم العثور على الجودات!";
         } else {
-            statusDiv.innerHTML = `<span style='color: #a33333;'>❌ خطأ: ${result.error || 'فشل جلب الجودات'}</span>`;
+            statusDiv.innerHTML = `❌ خطأ: ${result.error}`;
             mainBtn.disabled = false;
         }
-    } catch (error) {
-        statusDiv.innerHTML = "<span style='color: #a33333;'>💥 حدث خطأ في الاتصال بالخادم الداخلي.</span>";
-        mainBtn.disabled = false;
-    }
+    } catch (e) { statusDiv.innerHTML = "💥 حدث خطأ."; mainBtn.disabled = false; }
 }
 
 async function startDownload() {
     const selectedIndex = document.getElementById('qualitySelect').value;
     const selectedMedia = availableMedias[selectedIndex];
-    const statusDiv = document.getElementById('status');
-    const downloadBtn = document.getElementById('downloadBtn');
     
-    document.getElementById('qualitySection').style.display = "none";
-    document.getElementById('progressSection').style.display = "block";
-    downloadBtn.disabled = true;
-    
-    statusDiv.innerHTML = "<span style='color: #3377aa;'>📥 جاري تهيئة التنزيل الفوري...</span>";
-
-    const progressInterval = setInterval(async () => {
-        try {
-            const progResponse = await fetch('/api/progress');
-            const progData = await progResponse.json();
-            if (progData.percent) {
-                document.getElementById('progressBar').style.width = progData.percent + '%';
-                document.getElementById('progressPercent').innerHTML = progData.percent + '%';
-            }
-        } catch (e) {}
-    }, 400);
-
-    try {
-        const response = await fetch('/api/download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ download_url: selectedMedia.url, extension: selectedMedia.extension || "mp4" })
-        });
-
-        const result = await response.json();
-        clearInterval(progressInterval);
-
-        if (response.ok && result.success) {
-            document.getElementById('progressBar').style.width = '100%';
-            document.getElementById('progressPercent').innerHTML = '100%';
-            
-            statusDiv.innerHTML = `
-                <span style='color: #448855; font-weight: bold;'>✨ اكتمل حفظ الفيديو بنجاح 100% داخل ذاكرة الجهاز!</span><br>
-                <span style='color: #4a4a4a; font-size: 11px;'>اسم الملف: ${result.file_name}</span><br>
-                <span style='color: #888; font-size: 12px; display: inline-block; margin-top: 10px;'>🔄 سيتم إعداد الواجهة لاستقبال رابط جديد تلقائياً خلال 5 ثوانٍ...</span>
-            `;
-
-            setTimeout(() => {
-                resetInterfaceToHome();
-            }, 5000);
-
-        } else {
-            statusDiv.innerHTML = `<span style='color: #a33333;'>❌ خطأ أثناء التحميل: ${result.error}</span>`;
-            document.getElementById('mainBtn').disabled = false;
-        }
-    } catch (error) {
-        clearInterval(progressInterval);
-        statusDiv.innerHTML = "<span style='color: #a33333;'>💥 فشل حفظ الميديا بالذاكرة.</span>";
-        document.getElementById('mainBtn').disabled = false;
-    }
-}
-
-function resetInterfaceToHome() {
-    document.getElementById('videoUrl').value = ""; 
-    document.getElementById('progressSection').style.display = "none"; 
-    document.getElementById('progressBar').style.width = '0%'; 
-    document.getElementById('progressPercent').innerHTML = '0%'; 
-    document.getElementById('qualitySection').style.display = "none"; 
-    document.getElementById('downloadBtn').disabled = false; 
-    document.getElementById('mainBtn').disabled = false; 
-    document.getElementById('status').innerHTML = "🎯 مستعد وفي انتظار الروابط..."; 
-    availableMedias = []; 
+    // توجيه المتصفح لتحميل الرابط مباشرة
+    window.location.href = `/api/download?url=${encodeURIComponent(selectedMedia.url)}&ext=${selectedMedia.extension || 'mp4'}`;
+    document.getElementById('status').innerHTML = "📥 جاري بدء التحميل...";
 }
 </script>
 
 </body>
 </html>
 """
-
-download_progress = {"percent": 0}
 
 @app.route('/')
 def home():
@@ -374,74 +284,33 @@ def home():
 def check_api():
     data = request.get_json()
     video_url = data.get('url', '').strip()
-
-    if not video_url:
-        return jsonify({"error": "الرابط فارغ"}), 400
-
+    if not video_url: return jsonify({"error": "الرابط فارغ"}), 400
     rapidapi_url = "https://social-download-all-in-one.p.rapidapi.com/v1/social/autolink"
     headers = {
         "x-rapidapi-key": "e195cdade9mshe443655009cefd2p12a714jsnf6a8c5ff2e9f",
         "x-rapidapi-host": "social-download-all-in-one.p.rapidapi.com",
         "Content-Type": "application/json"
     }
-
     try:
         response = requests.post(rapidapi_url, json={"url": video_url}, headers=headers)
-        if response.status_code != 200:
-            return jsonify({"error": "السيرفر لا يستجيب بالشكل الصحيح"}), 500
-
         result = response.json()
-        medias = []
-
-        if result and 'medias' in result and len(result['medias']) > 0:
-            medias = result['medias']
-        elif result and 'url' in result:
-            medias = [{"url": result['url'], "quality": "تلقائية", "extension": "mp4"}]
-
-        if not medias:
-            return jsonify({"error": "لم نجد أي جودات متاحة لهذا الرابط"}), 404
-
+        medias = result.get('medias', []) if 'medias' in result else [{"url": result.get('url', ''), "quality": "تلقائية", "extension": "mp4"}]
         return jsonify({"success": True, "medias": medias})
+    except Exception as e: return jsonify({"error": str(e)}), 500
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/progress', methods=['GET'])
-def get_progress():
-    return jsonify(download_progress)
-
-@app.route('/api/download', methods=['POST'])
+@app.route('/api/download', methods=['GET'])
 def download_api():
-    global download_progress
-    download_progress["percent"] = 0
+    direct_url = request.args.get('url')
+    ext = request.args.get('ext', 'mp4')
+    
+    def generate():
+        response = requests.get(direct_url, stream=True)
+        for chunk in response.iter_content(chunk_size=1024 * 256):
+            if chunk: yield chunk
 
-    data = request.get_json()
-    direct_url = data.get('download_url')
-    ext = data.get('extension', 'mp4')
-
-    try:
-        # ملاحظة: السيرفرات السحابية لا تملك صلاحية الوصول لذاكرة الهاتف
-        download_folder = os.getcwd() 
-        file_name = f"HMA_{int(time.time())}.{ext}"
-        full_save_path = os.path.join(download_folder, file_name)
-
-        video_response = requests.get(direct_url, stream=True)
-        total_size = int(video_response.headers.get('content-length', 0))
-        
-        downloaded_size = 0
-        with open(full_save_path, 'wb') as file:
-            for chunk in video_response.iter_content(chunk_size=1024 * 256):
-                if chunk:
-                    file.write(chunk)
-                    downloaded_size += len(chunk)
-                    if total_size > 0:
-                        download_progress["percent"] = int((downloaded_size / total_size) * 100)
-
-        download_progress["percent"] = 100
-        return jsonify({"success": True, "file_name": file_name})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return Response(stream_with_context(generate()), 
+                    headers={'Content-Disposition': f'attachment; filename=HMA_Video.{ext}',
+                             'Content-Type': 'video/mp4'})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
